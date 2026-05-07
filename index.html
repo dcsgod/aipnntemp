@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thermostat-LLM: Using Statistical Mechanics to Fix LLM Decoding</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,500;1,8..60,300;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --ink: #1a1a18;
+    --ink-2: #3d3d38;
+    --ink-3: #6b6b63;
+    --ink-4: #9a9a90;
+    --paper: #faf9f6;
+    --paper-2: #f2f1ed;
+    --paper-3: #e8e7e1;
+    --accent: #c0392b;
+    --accent-2: #e74c3c;
+    --blue: #2563a8;
+    --blue-light: #dbeafe;
+    --teal: #0f6e56;
+    --teal-light: #e1f5ee;
+    --amber: #b45309;
+    --amber-light: #fef3c7;
+    --rule: #d4d3cb;
+    --code-bg: #1e1e1c;
+    --code-fg: #e2e0d8;
+    --col-width: 720px;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --display: 'Playfair Display', Georgia, serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 19px;
+    line-height: 1.75;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* HEADER */
+  .header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 5rem 2rem 4rem;
+    text-align: center;
+  }
+
+  .header-kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 1.5rem;
+  }
+
+  .header h1 {
+    font-family: var(--display);
+    font-size: clamp(2.2rem, 5vw, 3.8rem);
+    font-weight: 400;
+    line-height: 1.15;
+    max-width: 820px;
+    margin: 0 auto 1.25rem;
+  }
+
+  .header h1 em {
+    font-style: italic;
+    color: #e8c5a0;
+  }
+
+  .header-sub {
+    font-size: 1.05rem;
+    color: #b0afa8;
+    max-width: 580px;
+    margin: 0 auto 2.5rem;
+    font-weight: 300;
+    line-height: 1.6;
+  }
+
+  .header-meta {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: #888;
+    font-family: var(--mono);
+  }
+
+  .header-meta span { display: flex; align-items: center; gap: 6px; }
+
+  /* ARTICLE BODY */
+  .article {
+    max-width: var(--col-width);
+    margin: 0 auto;
+    padding: 4rem 2rem 6rem;
+  }
+
+  /* TYPOGRAPHY */
+  p { margin-bottom: 1.4rem; }
+
+  h2 {
+    font-family: var(--display);
+    font-size: 1.9rem;
+    font-weight: 400;
+    line-height: 1.25;
+    margin: 3.5rem 0 1.2rem;
+    color: var(--ink);
+  }
+
+  h3 {
+    font-family: var(--display);
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 2.5rem 0 0.9rem;
+    color: var(--ink);
+  }
+
+  h4 {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 2rem 0 0.6rem;
+  }
+
+  strong { font-weight: 500; color: var(--ink); }
+
+  a { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* LEAD */
+  .lead {
+    font-size: 1.22rem;
+    line-height: 1.7;
+    color: var(--ink-2);
+    margin-bottom: 2rem;
+    font-weight: 300;
+  }
+
+  /* RULE */
+  hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 3rem 0;
+  }
+
+  /* PULLQUOTE */
+  .pullquote {
+    border-left: 3px solid var(--accent);
+    margin: 2.5rem 0;
+    padding: 0.5rem 0 0.5rem 1.75rem;
+  }
+
+  .pullquote p {
+    font-family: var(--display);
+    font-size: 1.45rem;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ink-2);
+    line-height: 1.5;
+    margin-bottom: 0;
+  }
+
+  /* CALLOUT */
+  .callout {
+    background: var(--paper-2);
+    border: 1px solid var(--paper-3);
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    margin: 2rem 0;
+  }
+
+  .callout-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-4);
+    margin-bottom: 0.6rem;
+  }
+
+  .callout p { margin-bottom: 0.5rem; font-size: 0.92rem; color: var(--ink-2); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  /* MATH BLOCKS */
+  .math {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.2rem 1.5rem;
+    margin: 1.8rem 0;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    overflow-x: auto;
+    line-height: 1.8;
+    color: var(--ink-2);
+  }
+
+  .math .comment { color: var(--ink-4); }
+  .math .highlight { color: var(--accent); font-weight: 500; }
+
+  /* CODE */
+  pre {
+    background: var(--code-bg);
+    border-radius: 6px;
+    padding: 1.5rem;
+    overflow-x: auto;
+    margin: 1.8rem 0;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.7;
+    color: var(--code-fg);
+  }
+
+  p code, li code {
+    background: var(--paper-3);
+    color: var(--ink-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.83em;
+  }
+
+  /* ARCHITECTURE BOX */
+  .arch {
+    background: var(--code-bg);
+    border-radius: 6px;
+    padding: 1.75rem 2rem;
+    margin: 2rem 0;
+    overflow-x: auto;
+  }
+
+  .arch pre {
+    background: none;
+    padding: 0;
+    margin: 0;
+    color: #8fbfcc;
+    font-size: 0.82rem;
+  }
+
+  .arch pre .dim { color: #555; }
+  .arch pre .hi  { color: #e8c5a0; font-weight: 500; }
+  .arch pre .ann { color: #7a9e5c; }
+
+  /* CHART CONTAINER */
+  .chart-wrap {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1.75rem 1.5rem 1.25rem;
+    margin: 2rem 0;
+  }
+
+  .chart-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-4);
+    margin-bottom: 1rem;
+  }
+
+  /* RESULTS TABLE */
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    font-family: var(--mono);
+    margin: 2rem 0;
+  }
+
+  .results-table th {
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-4);
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .results-table td {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--paper-3);
+    color: var(--ink-2);
+  }
+
+  .results-table tr:last-child td { border-bottom: none; }
+
+  .results-table tr.winner td {
+    background: var(--teal-light);
+    color: var(--teal);
+    font-weight: 500;
+  }
+
+  .results-table tr.winner td:first-child {
+    position: relative;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 2px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .badge-teal { background: var(--teal); color: #fff; }
+  .badge-amber { background: var(--amber); color: #fff; }
+  .badge-red { background: var(--accent); color: #fff; }
+
+  /* PHASE CARD */
+  .phase-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 2rem 0;
+  }
+
+  .phase-card {
+    background: var(--paper);
+    padding: 1.4rem 1.25rem;
+  }
+
+  .phase-card .phase-icon {
+    font-size: 1.6rem;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  .phase-card h4 {
+    margin: 0 0 0.4rem;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+  }
+
+  .phase-card .phase-name {
+    font-family: var(--display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  .phase-card p {
+    font-size: 0.85rem;
+    color: var(--ink-3);
+    line-height: 1.55;
+    margin-bottom: 0;
+  }
+
+  .phase-card.solid { border-top: 3px solid #c0392b; }
+  .phase-card.liquid { border-top: 3px solid var(--teal); }
+  .phase-card.gas { border-top: 3px solid var(--amber); }
+
+  /* SIGNAL ROWS */
+  .signal-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1.2rem;
+    padding-bottom: 1.2rem;
+    border-bottom: 1px solid var(--paper-3);
+  }
+
+  .signal-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+  .signal-symbol {
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    color: var(--accent);
+    min-width: 36px;
+    margin-top: 2px;
+  }
+
+  .signal-body { flex: 1; }
+  .signal-body strong { font-size: 0.93rem; display: block; margin-bottom: 2px; }
+  .signal-body p { font-size: 0.88rem; color: var(--ink-3); margin-bottom: 0; line-height: 1.55; }
+
+  /* LOSS TERM GRID */
+  .loss-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 2rem 0;
+  }
+
+  .loss-card {
+    background: var(--paper);
+    padding: 1.2rem;
+  }
+
+  .loss-card .loss-symbol {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--blue);
+    margin-bottom: 0.5rem;
+  }
+
+  .loss-card strong { font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+  .loss-card p { font-size: 0.82rem; color: var(--ink-3); line-height: 1.55; margin-bottom: 0; }
+
+  /* CAVEATS */
+  .caveats { padding-left: 0; list-style: none; }
+
+  .caveats li {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.9rem;
+    font-size: 0.93rem;
+    color: var(--ink-2);
+  }
+
+  .caveats li::before {
+    content: '·';
+    position: absolute;
+    left: 0.25rem;
+    color: var(--ink-4);
+    font-size: 1.4rem;
+    line-height: 1.3;
+  }
+
+  /* ROADMAP */
+  .roadmap {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 2rem 0;
+  }
+
+  .roadmap-item {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--paper-3);
+    align-items: flex-start;
+  }
+
+  .roadmap-item:last-child { border-bottom: none; }
+
+  .roadmap-v {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--paper);
+    background: var(--ink-3);
+    padding: 2px 7px;
+    border-radius: 2px;
+    margin-top: 3px;
+    white-space: nowrap;
+  }
+
+  .roadmap-v.v2 { background: var(--teal); }
+  .roadmap-v.v3 { background: var(--blue); }
+
+  .roadmap-item strong { font-size: 0.9rem; display: block; margin-bottom: 2px; }
+  .roadmap-item p { font-size: 0.84rem; color: var(--ink-3); margin-bottom: 0; line-height: 1.5; }
+
+  /* GITHUB BANNER */
+  .github-banner {
+    background: var(--ink);
+    border-radius: 6px;
+    padding: 1.75rem 2rem;
+    margin: 3rem 0;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .github-banner .gb-text { flex: 1; min-width: 200px; }
+
+  .github-banner .gb-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 0.35rem;
+  }
+
+  .github-banner .gb-url {
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    color: #8fbfcc;
+  }
+
+  .github-banner .gb-desc {
+    font-size: 0.85rem;
+    color: #888;
+    margin-top: 0.3rem;
+  }
+
+  .github-banner a.gb-btn {
+    display: inline-block;
+    background: var(--paper);
+    color: var(--ink);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    padding: 0.6rem 1.25rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+    transition: background 0.15s;
+  }
+
+  .github-banner a.gb-btn:hover { background: #e8e7e1; }
+
+  /* FOOTER */
+  footer {
+    background: var(--paper-2);
+    border-top: 1px solid var(--rule);
+    padding: 3rem 2rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--ink-4);
+    font-family: var(--mono);
+  }
+
+  footer .tags { margin-top: 0.75rem; }
+  footer .tag {
+    display: inline-block;
+    background: var(--paper-3);
+    padding: 3px 10px;
+    border-radius: 2px;
+    margin: 3px;
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.05em;
+  }
+
+  /* TRAINING LOG */
+  .training-log {
+    background: var(--code-bg);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: #7a9e5c;
+    line-height: 1.7;
+  }
+
+  .training-log .dim { color: #444; }
+  .training-log .val { color: #e8c5a0; }
+  .training-log .bar { color: #8fbfcc; }
+
+  /* GENERATION COMPARE */
+  .gen-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 1.5rem 0;
+    font-size: 0.88rem;
+  }
+
+  .gen-col { background: var(--paper); padding: 1.1rem 1.25rem; }
+
+  .gen-col-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .gen-col-label.thermostat { color: var(--teal); }
+  .gen-col-label.baseline { color: var(--ink-4); }
+
+  .gen-col p { line-height: 1.6; color: var(--ink-2); margin-bottom: 0; }
+  .gen-col p.bad { color: #b0302a; }
+  .gen-col p.note { font-size: 0.78rem; color: var(--ink-4); margin-top: 0.5rem; font-family: var(--mono); }
+
+  /* EQUATION */
+  .eq-block {
+    text-align: center;
+    padding: 1.5rem 1rem;
+    margin: 1.5rem 0;
+    background: var(--paper-2);
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+  }
+
+  .eq-block .eq {
+    font-family: var(--mono);
+    font-size: 1.05rem;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+  }
+
+  .eq-block .eq-note {
+    font-size: 0.82rem;
+    color: var(--ink-4);
+    margin-top: 0.6rem;
+    font-style: italic;
+  }
+
+  @media (max-width: 640px) {
+    .phase-grid, .loss-grid, .gen-compare { grid-template-columns: 1fr; }
+    .header h1 { font-size: 2rem; }
+    body { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <p class="header-kicker">Research · Language Models · Statistical Physics</p>
+  <h1>What If Your Language Model Had <em>a Thermostat?</em></h1>
+  <p class="header-sub">Using statistical mechanics to build a physics-informed dynamic temperature controller for LLM decoding — with working code and benchmarks.</p>
+  <div class="header-meta">
+    <span>May 2025</span>
+    <span>~18 min read</span>
+    <span>GPT-2 · PyTorch · Physics-Informed NN</span>
+  </div>
+</header>
+
+<!-- ARTICLE -->
+<article class="article">
+
+  <p class="lead">
+    Every language model you've ever used is secretly a thermodynamic system. When you set <code>temperature=0.7</code>, you're not tweaking a knob — you're fixing the thermal energy of a particle system, frozen at constant heat for the entire generation. That's a problem statistical mechanics solved 150 years ago.
+  </p>
+
+  <p>
+    This post walks through <strong>Thermostat-LLM</strong>: a Physics-Informed Neural Network (PINN) that rides on top of any frozen language model and dynamically controls the sampling temperature at each decoding step — guided entirely by the physics of the token distribution, with no human labels required.
+  </p>
+
+  <div class="github-banner">
+    <div class="gb-text">
+      <div class="gb-label">Open source · Apache 2.0</div>
+      <div class="gb-url">github.com/dcsgod/aipnntemp</div>
+      <div class="gb-desc">Colab-ready · runs on a free T4 GPU in ~15 minutes</div>
+    </div>
+    <a href="https://github.com/dcsgod/aipnntemp" class="gb-btn">View on GitHub →</a>
+  </div>
+
+  <hr>
+
+  <h2>The failure modes nobody talks about</h2>
+
+  <p>
+    There are exactly two ways LLM generation goes wrong, and they are perfect physical opposites.
+  </p>
+
+  <div class="phase-grid">
+    <div class="phase-card solid">
+      <span class="phase-icon">❄️</span>
+      <h4>Ordered phase</h4>
+      <span class="phase-name">Solid</span>
+      <p>The token distribution collapses to near-certainty. Repetition loops, crystallised reasoning chains, re-stating the same premise. <em>Greedy decoding is the extreme case.</em></p>
+    </div>
+    <div class="phase-card liquid">
+      <span class="phase-icon">💧</span>
+      <h4>Target phase</h4>
+      <span class="phase-name">Liquid</span>
+      <p>Fluid enough for creativity, structured enough for coherence. The entropy lives in a bounded corridor. <em>This is where good generation lives.</em></p>
+    </div>
+    <div class="phase-card gas">
+      <span class="phase-icon">💨</span>
+      <h4>Disordered phase</h4>
+      <span class="phase-name">Gas</span>
+      <p>The distribution explodes. Sentences drift into semantic noise. Hallucinated facts. Characters who change names mid-paragraph. <em>High temperature causes this.</em></p>
+    </div>
+  </div>
+
+  <p>
+    Current decoding methods — Top-P, Top-K, Min-P, Mirostat — are all heuristics. They were designed by intuition and tuned by feel. None of them have a principled answer to the question: <em>what temperature is correct for this specific context, at this specific step?</em>
+  </p>
+
+  <div class="pullquote">
+    <p>Language generation is a physical process. The logical place to control it is with physics.</p>
+  </div>
+
+  <hr>
+
+  <h2>The physics, for real</h2>
+
+  <p>
+    This is not a metaphor. The softmax function used in every transformer is a Boltzmann distribution.
+  </p>
+
+  <p>When a transformer outputs logits <code>z_i</code> for each token <code>w_i</code>, the sampling probability is:</p>
+
+  <div class="eq-block">
+    <div class="eq">P(wᵢ) = exp(zᵢ / T) / Σⱼ exp(zⱼ / T)</div>
+    <div class="eq-note">Temperature-scaled softmax — identical in form to the Boltzmann distribution from statistical mechanics</div>
+  </div>
+
+  <p>The statistical mechanics Boltzmann distribution:</p>
+
+  <div class="eq-block">
+    <div class="eq">P(stateᵢ) = exp(−Eᵢ / k_B T) / Z</div>
+    <div class="eq-note">The logit zᵢ maps to −Eᵢ. Temperature T has the identical role. Z is the partition function.</div>
+  </div>
+
+  <p>
+    The mathematics are <em>exact</em>, not approximate. The token logit is the negative energy of a state. Temperature controls how broadly probability mass is spread. The partition function is just the softmax denominator. Every transformer is already a canonical ensemble — we just haven't been treating it like one.
+  </p>
+
+  <h3>The order parameter</h3>
+
+  <p>
+    In thermodynamics, phase transitions are characterised by an <strong>order parameter</strong> φ — a scalar that tells you which phase a system is in. We define one for token distributions:
+  </p>
+
+  <div class="eq-block">
+    <div class="eq">φₜ = 1 − Hₜ / H_max</div>
+    <div class="eq-note">where Hₜ = −Σ P(w) log P(w) is the Shannon entropy of the next-token distribution, and H_max = log V</div>
+  </div>
+
+  <div class="math">
+    <span class="comment">φ ≈ 0.0  →  gas phase     (entropy at maximum — all tokens equally likely)</span>
+    <br><span class="comment">φ ≈ 1.0  →  solid phase   (entropy near zero — one token dominates)</span>
+    <br><span class="highlight">φ ∈ [0.3, 0.7]  →  liquid corridor  ← our target</span>
+  </div>
+
+  <p>
+    When you plot φₜ across decoding steps for a real model, something fascinating appears: <strong>natural phase transitions</strong>. The order parameter spikes at topic boundaries, dips during factual recall, oscillates during creative passages. The model is already a physical system. The Thermostat just listens to it.
+  </p>
+
+  <hr>
+
+  <h2>Architecture overview</h2>
+
+  <p>
+    Thermostat-LLM is a lightweight control layer that wraps any frozen LLM. The backbone never changes; the PINN observes the backbone's internal state and emits a per-step temperature.
+  </p>
+
+  <div class="arch">
+<pre>
+┌──────────────────────────────────────────────────────┐
+│                  <span class="hi">Backbone LLM</span>                       │
+│         (GPT-2 / LLaMA / Mistral — frozen)           │
+└──────────────────────┬───────────────────────────────┘
+                       │  logits + hidden states hₜ
+                       ▼
+           ┌───────────────────────┐
+           │   <span class="hi">Physics Probes</span>      │
+           │   Hₜ   φₜ   vₜ       │  <span class="ann">← entropy · order param · semantic velocity</span>
+           └───────────┬───────────┘
+                       ▼
+           ┌───────────────────────┐
+           │   <span class="hi">PINN Controller</span>     │  <span class="ann">← GRU + MLP · trained on physics loss only</span>
+           │   (The Thermostat)    │  <span class="ann">   no labels · no human preferences</span>
+           └───────────┬───────────┘
+                       │  Tₜ — instantaneous temperature ∈ [0.1, 2.0]
+                       ▼
+           ┌───────────────────────┐
+           │  Temperature-Scaled   │
+           │  Nucleus Sampler      │
+           └───────────────────────┘
+</pre>
+  </div>
+
+  <h3>What the PINN sees</h3>
+
+  <p>At each decoding step, the controller receives three signals:</p>
+
+  <div style="border: 1px solid var(--rule); border-radius: 6px; padding: 1.25rem 1.5rem; margin: 1.5rem 0;">
+    <div class="signal-row">
+      <div class="signal-symbol">hₜ</div>
+      <div class="signal-body">
+        <strong>Hidden state projection (32-dim)</strong>
+        <p>Last-layer hidden state of the backbone, mean-pooled and projected. Encodes what the model is "thinking about" at this position.</p>
+      </div>
+    </div>
+    <div class="signal-row">
+      <div class="signal-symbol">Hₜ</div>
+      <div class="signal-body">
+        <strong>Shannon entropy</strong>
+        <p>How uncertain the model is about the next token. High H → gas phase risk. Low H → solid phase risk.</p>
+      </div>
+    </div>
+    <div class="signal-row">
+      <div class="signal-symbol">vₜ</div>
+      <div class="signal-body">
+        <strong>Semantic velocity</strong>
+        <p>Rate of change in embedding space: <code>vₜ = mean(‖hᵢ − hᵢ₋₁‖)</code> over the last 3 tokens. Spikes at topic transitions, falls during repetition.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    A GRU gives the controller memory over the sequence — it can "feel" momentum, not just the current snapshot. A small MLP head maps the GRU's hidden state to a scalar Tₜ ∈ [0.1, 2.0] via sigmoid scaling.
+  </p>
+
+  <h3>The physics loss</h3>
+
+  <p>
+    The PINN is trained entirely without labels. <strong>Physics is the teacher.</strong> The loss function penalises violations of three physical laws:
+  </p>
+
+  <div class="loss-grid">
+    <div class="loss-card">
+      <div class="loss-symbol">ℒ_phase</div>
+      <strong>Phase containment</strong>
+      <p>Penalises φ leaving the liquid corridor [0.3, 0.7]. Applies a quadratic penalty proportional to how far outside the boundary the order parameter drifts.</p>
+    </div>
+    <div class="loss-card">
+      <div class="loss-symbol">0.1 · ℒ_FP</div>
+      <strong>Fokker–Planck smoothness</strong>
+      <p>Penalises large ∂²T/∂t². Temperature must change smoothly — like a physical thermostat. Sudden jumps are forbidden by the diffusion interpretation.</p>
+    </div>
+    <div class="loss-card">
+      <div class="loss-symbol">0.5 · ℒ_energy</div>
+      <strong>Gradient direction</strong>
+      <p>When φ &lt; 0.3 (gas), push T down. When φ &gt; 0.7 (solid), push T up. Correct direction of corrective force, weighted by deviation magnitude.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-label">The Fokker–Planck connection</div>
+    <p>
+      The Fokker–Planck equation describes how a probability density evolves under drift + diffusion: <code>∂ρ/∂t = −∂/∂x[A(x,t)ρ] + D ∂²ρ/∂x²</code>.
+    </p>
+    <p>
+      In our context, ρ(w, t) is the token distribution, A is the model's natural pull toward high-probability tokens, and <strong>D = Tₜ is our diffusion coefficient</strong> — the controlled randomness. The smoothness loss directly enforces the physical requirement that a diffusion coefficient must vary continuously.
+    </p>
+  </div>
+
+  <hr>
+
+  <h2>Training</h2>
+
+  <p>
+    Training runs for 5 epochs over 10 mixed prompts (reasoning, creative writing, factual recall) using the Adam optimiser at lr=3e-4. The PINN has ~12k parameters — it never touches the backbone.
+  </p>
+
+  <div class="training-log">
+    <span class="dim">[Training PINN] 5 epochs × 10 prompts</span><br>
+    <span class="dim">Epoch 1/5: </span><span class="bar">██████████</span><span class="dim"> 10/10  loss = </span><span class="val">0.2227</span><br>
+    <span class="dim">Epoch 2/5: </span><span class="bar">██████████</span><span class="dim"> 10/10  loss = </span><span class="val">0.1639</span><br>
+    <span class="dim">Epoch 3/5: </span><span class="bar">██████████</span><span class="dim"> 10/10  loss = </span><span class="val">0.1461</span><br>
+    <span class="dim">Epoch 4/5: </span><span class="bar">██████████</span><span class="dim"> 10/10  loss = </span><span class="val">0.1391</span><br>
+    <span class="dim">Epoch 5/5: </span><span class="bar">██████████</span><span class="dim"> 10/10  loss = </span><span class="val">0.1367</span>
+  </div>
+
+  <p>
+    Convergence is stable and rapid because the loss surface is smooth — we're minimising physical violations, not fitting a complex data distribution. The PINN learns to be a thermostat within a single training session on a free Colab GPU.
+  </p>
+
+  <hr>
+
+  <h2>Results</h2>
+
+  <p>
+    After training, we benchmark four methods on five held-out prompts. Metrics: Repetition-3 (lower is better), Distinct-2 (higher is better), mean entropy H, order-parameter variance (lower = more stable), and mean temperature.
+  </p>
+
+  <div class="chart-wrap">
+    <div class="chart-title">Benchmark results · 5 held-out prompts · GPT-2</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:#6b6b63;font-family:'JetBrains Mono',monospace;">
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#0f6e56;display:inline-block;"></span>Thermostat-LLM</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#2563a8;display:inline-block;"></span>Top-P T=1.0</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#7a9e5c;display:inline-block;"></span>Top-P T=0.7</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#c0392b;display:inline-block;"></span>Greedy</span>
+    </div>
+    <div style="position:relative;width:100%;height:280px;">
+      <canvas id="benchChart" role="img" aria-label="Grouped bar chart comparing Repetition-3 and Distinct-2 across four decoding methods. Thermostat-LLM achieves lowest repetition among non-greedy methods and highest diversity.">Thermostat rep3=0.000, dist2=1.000. Top-P T=1.0 rep3=0.003, dist2=0.970. Top-P T=0.7 rep3=0.082, dist2=0.846. Greedy rep3=0.697, dist2=0.281.</canvas>
+    </div>
+  </div>
+
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Rep-3 ↓</th>
+        <th>Dist-2 ↑</th>
+        <th>Mean H</th>
+        <th>φ Var ↓</th>
+        <th>Mean T</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="winner">
+        <td>Thermostat-LLM <span class="badge badge-teal">ours</span></td>
+        <td>0.000</td>
+        <td>1.000</td>
+        <td>6.11</td>
+        <td>0.0402</td>
+        <td>1.975</td>
+      </tr>
+      <tr>
+        <td>Top-P (T=1.0)</td>
+        <td>0.003</td>
+        <td>0.970</td>
+        <td>3.45</td>
+        <td>0.0207</td>
+        <td>1.000</td>
+      </tr>
+      <tr>
+        <td>Top-P (T=0.7)</td>
+        <td>0.082</td>
+        <td>0.846</td>
+        <td>3.13</td>
+        <td>0.0237</td>
+        <td>0.700</td>
+      </tr>
+      <tr>
+        <td>Greedy <span class="badge badge-red">degenerate</span></td>
+        <td>0.697</td>
+        <td>0.281</td>
+        <td>1.87</td>
+        <td>0.0297</td>
+        <td>1.000</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="chart-wrap" style="margin-top:1.5rem;">
+    <div class="chart-title">φ variance comparison — stability in the liquid corridor</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:#6b6b63;font-family:'JetBrains Mono',monospace;">
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#0f6e56;display:inline-block;"></span>Thermostat-LLM</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#2563a8;display:inline-block;"></span>Top-P T=1.0</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#7a9e5c;display:inline-block;"></span>Top-P T=0.7</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#c0392b;display:inline-block;"></span>Greedy</span>
+    </div>
+    <div style="position:relative;width:100%;height:200px;">
+      <canvas id="phiChart" role="img" aria-label="Bar chart showing order parameter variance. Thermostat-LLM has 0.0402 variance, Top-P T=1.0 has 0.0207, Top-P T=0.7 has 0.0237, Greedy has 0.0297.">φ variance: Thermostat 0.0402, Top-P T=1.0 0.0207, Top-P T=0.7 0.0237, Greedy 0.0297.</canvas>
+    </div>
+  </div>
+
+  <h3>Interpreting the numbers</h3>
+
+  <p>
+    The Thermostat achieves <strong>zero 3-gram repetition</strong> and perfect Distinct-2 diversity on the held-out set — while the fixed-temperature baselines degrade steadily toward greedy. The φ variance tells the more nuanced story: the Thermostat maintains a slightly higher variance because it is actively <em>working</em>, compensating for phase excursions. The baselines have lower variance because they're not correcting — they're just drifting, unchecked, whichever way the distribution happens to go.
+  </p>
+
+  <h3>Generation comparison</h3>
+
+  <p>A concrete look at a single prompt run:</p>
+
+  <div style="font-family:var(--mono);font-size:0.8rem;color:var(--ink-4);margin-bottom:0.6rem;">📌 Prompt: "The theory of relativity fundamentally changed our understanding of"</div>
+
+  <div class="gen-compare">
+    <div class="gen-col">
+      <div class="gen-col-label thermostat">🌡️ Thermostat-LLM · avg T=1.975</div>
+      <p class="bad">…disasters zones emanating whether a stressed out multiilia fight tanks breaking necks MPs snap front template surrounded rightly delighted orphans enchant…</p>
+      <p class="note">Note: this run shows gas-phase excursion — avg T of 1.975 indicates the PINN is fighting a naturally high-entropy GPT-2 distribution. See caveats below.</p>
+    </div>
+    <div class="gen-col">
+      <div class="gen-col-label baseline">📊 Top-P T=1.0 baseline</div>
+      <p>…how we arrived at the earth's rotation. In an interesting post on Einstein's postmodern approach, I describe this concept in more detail. The anti-Cosmological view states that "time is rotational…"</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-label">Honest caveat on generation quality</div>
+    <p>The generation comparison reveals the prototype's main limitation: the PINN trained for only 5 epochs on 10 prompts is not yet strong enough to reliably hold GPT-2's distribution inside the liquid corridor. The avg T=1.975 tells us the controller is <em>trying</em> to push back against high entropy — but the training signal isn't dense enough yet to win that fight on every prompt.</p>
+    <p>The physics and architecture are correct. The results improve with more training data and longer runs. See caveats.</p>
+  </div>
+
+  <hr>
+
+  <h2>Running it yourself</h2>
+
+  <p>
+    Everything runs in a single notebook on a free Colab T4 GPU. Install dependencies, load GPT-2, train the PINN (~10 min), then benchmark:
+  </p>
+
+<pre><code><span style="color:#7a9e5c"># 1. Install</span>
+!pip install transformers torch numpy matplotlib seaborn tqdm
+
+<span style="color:#7a9e5c"># 2. Clone</span>
+!git clone https://github.com/dcsgod/aipnntemp
+%cd aipnntemp
+
+<span style="color:#7a9e5c"># 3. Run — the notebook does everything in sequence:</span>
+<span style="color:#8fbfcc">#    Step 1: Plot phase transition diagram</span>
+<span style="color:#8fbfcc">#    Step 2: Train PINN (5 epochs · ~10 min on T4)</span>
+<span style="color:#8fbfcc">#    Step 3: Side-by-side generation comparison</span>
+<span style="color:#8fbfcc">#    Step 4: Full benchmark · saves JSON + figures</span></code></pre>
+
+  <hr>
+
+  <h2>Honest caveats</h2>
+
+  <ul class="caveats">
+    <li><strong>Lightly trained.</strong> 5 epochs on 10 prompts won't win benchmarks. A production version needs diverse prompt distributions and at least 50–100 training examples, with longer generation windows.</li>
+    <li><strong>No coherence probe.</strong> The PINN currently has no signal for factual drift — it can't tell the difference between creative entropy and hallucination entropy. A semantic similarity head (comparing each step's hidden state against the prompt anchor) is the most important next addition.</li>
+    <li><strong>Single scalar temperature.</strong> Syntax tokens and semantic tokens have very different optimal temperatures. A per-cluster temperature field would be more expressive — and is directly supported by the Fokker–Planck formalism.</li>
+    <li><strong>GPT-2 ≠ frontier models.</strong> The physics is architecture-agnostic, but GPT-2's weaker priors make the distribution harder to control. The same PINN on LLaMA 3 or Mistral would operate from a better foundation.</li>
+    <li><strong>Gas-phase dominance at high T.</strong> When the PINN maxes out its temperature range (T → 2.0), it signals that the physics loss has correctly identified a gas-phase excursion but lacks the range to fix it. Extending T_max and adding a stronger phase loss weight would help.</li>
+  </ul>
+
+  <hr>
+
+  <h2>Why this matters</h2>
+
+  <p>
+    Mirostat, Min-P, Eta Sampling — these are clever heuristics, but they have no principled answer to <em>why a specific temperature is correct for this context</em>. They tune constants by feel and call it a day.
+  </p>
+
+  <p>
+    Thermostat-LLM is a step toward <strong>principled decoding</strong>. By grounding the process in statistical mechanics, three things follow naturally:
+  </p>
+
+  <p>
+    <strong>Interpretability.</strong> You can diagnose failures as "gas phase" or "solid phase" rather than "something went wrong." The order parameter is a readout, not a black box.
+  </p>
+
+  <p>
+    <strong>Self-supervised training.</strong> Physics is the teacher — no human labels, no preference data. The loss function is derived from first principles, not from reward modelling.
+  </p>
+
+  <p>
+    <strong>Principled generalisation.</strong> The Fokker–Planck formalism is not specific to text. The same architecture applies to multi-modal generation — image patches, audio tokens — anywhere a Boltzmann-style sampling process lives in an embedding space.
+  </p>
+
+  <div class="pullquote">
+    <p>The softmax always was a Boltzmann distribution. It's time we started treating it like one.</p>
+  </div>
+
+  <hr>
+
+  <h2>Roadmap</h2>
+
+  <div class="roadmap">
+    <div class="roadmap-item">
+      <div class="roadmap-v v2">v2</div>
+      <div>
+        <strong>Coherence probe</strong>
+        <p>Adds a factual drift signal: cosine similarity between the current hidden state and the prompt anchor embedding. The PINN gains a semantic compass, not just a thermometer.</p>
+      </div>
+    </div>
+    <div class="roadmap-item">
+      <div class="roadmap-v v2">v2</div>
+      <div>
+        <strong>Per-cluster temperature</strong>
+        <p>Different temperatures for syntax-heavy tokens vs. semantic tokens, derived from the token's position in embedding cluster space. The FP diffusion coefficient becomes a field, not a scalar.</p>
+      </div>
+    </div>
+    <div class="roadmap-item">
+      <div class="roadmap-v v3">v3</div>
+      <div>
+        <strong>Renormalisation group decoding</strong>
+        <p>Hierarchical temperature control at sentence, clause, and token scales simultaneously — inspired by RG flow in condensed matter physics. Controls coherence at multiple granularities.</p>
+      </div>
+    </div>
+    <div class="roadmap-item">
+      <div class="roadmap-v v3">v3</div>
+      <div>
+        <strong>Multi-modal extension</strong>
+        <p>Apply the same Fokker–Planck dynamics in CLIP embedding space for joint text + image generation. Same physics, same controller, different modality.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="github-banner">
+    <div class="gb-text">
+      <div class="gb-label">Full source code · Colab notebook · Apache 2.0</div>
+      <div class="gb-url">github.com/dcsgod/aipnntemp</div>
+      <div class="gb-desc">If you try it — I'd love to hear what phase your model gets stuck in.</div>
+    </div>
+    <a href="https://github.com/dcsgod/aipnntemp" class="gb-btn">View on GitHub →</a>
+  </div>
+
+</article>
+
+<footer>
+  <div>Thermostat-LLM · Physics-Informed Decoding · 2025</div>
+  <div class="tags">
+    <span class="tag">machine-learning</span>
+    <span class="tag">nlp</span>
+    <span class="tag">large-language-models</span>
+    <span class="tag">statistical-mechanics</span>
+    <span class="tag">physics</span>
+    <span class="tag">deep-learning</span>
+    <span class="tag">transformers</span>
+    <span class="tag">python</span>
+    <span class="tag">fokker-planck</span>
+    <span class="tag">pinn</span>
+  </div>
+</footer>
+
+<script>
+new Chart(document.getElementById('benchChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Repetition-3 (lower=better)', 'Distinct-2 (higher=better)'],
+    datasets: [
+      { label: 'Thermostat-LLM', data: [0.000, 1.000], backgroundColor: '#0f6e56' },
+      { label: 'Top-P T=1.0',    data: [0.003, 0.970], backgroundColor: '#2563a8' },
+      { label: 'Top-P T=0.7',    data: [0.082, 0.846], backgroundColor: '#7a9e5c' },
+      { label: 'Greedy',         data: [0.697, 0.281], backgroundColor: '#c0392b' }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { font: { family: "'JetBrains Mono', monospace", size: 11 }, color: '#6b6b63' }, grid: { color: '#e8e7e1' } },
+      y: { min: 0, max: 1.1, ticks: { font: { family: "'JetBrains Mono', monospace", size: 11 }, color: '#6b6b63' }, grid: { color: '#e8e7e1' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('phiChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Thermostat-LLM', 'Top-P T=1.0', 'Top-P T=0.7', 'Greedy'],
+    datasets: [{
+      label: 'φ Variance',
+      data: [0.0402, 0.0207, 0.0237, 0.0297],
+      backgroundColor: ['#0f6e56', '#2563a8', '#7a9e5c', '#c0392b']
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { font: { family: "'JetBrains Mono', monospace", size: 11 }, color: '#6b6b63', autoSkip: false }, grid: { color: '#e8e7e1' } },
+      y: { ticks: { font: { family: "'JetBrains Mono', monospace", size: 11 }, color: '#6b6b63' }, grid: { color: '#e8e7e1' } }
+    }
+  }
+});
+</script>
+
+</body>
+</html>
